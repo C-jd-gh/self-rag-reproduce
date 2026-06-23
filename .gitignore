@@ -1,0 +1,76 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Python 虚拟环境
+.venv/
+venv/
+env/
+conda-env/
+
+# IDE / 系统文件
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# 环境变量与密钥
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+# 日志和临时文件
+*.log
+*.tmp
+*.temp
+*.pid
+*.json_tmp
+
+# 模型权重与训练检查点
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+checkpoints/
+checkpoint-*/
+models/
+wandb/
+runs/
+outputs/
+
+# 下载的大型数据与压缩包
+*.tar
+*.tar.gz
+*.tgz
+*.zip
+*.7z
+
+# 检索索引和向量文件
+*.faiss
+*.index
+*.npy
+*.npz
+embeddings/
+indexes/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# 项目中的外部大型数据
+self-rag/eval_data_external/
+
+# 生成的实验结果
+self-rag/eval_data_official/results/
+self-rag/archive_baseline_llama2_7b/
