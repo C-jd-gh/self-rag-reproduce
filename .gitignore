@@ -74,3 +74,7 @@ self-rag/eval_data_external/
 # 生成的实验结果
 self-rag/eval_data_official/results/
 self-rag/archive_baseline_llama2_7b/
+# Large evaluation datasets
+self-rag/eval_data_official/inputs/triviaqa_dev_w_gs.jsonl
+self-rag/eval_data_official/inputs/2wikimultihop-dev-br-top3.jsonl
+self-rag/eval_data_official/inputs/2wiki_for_selfrag.jsonl
