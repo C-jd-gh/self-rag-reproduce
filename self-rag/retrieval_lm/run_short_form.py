@@ -3,17 +3,20 @@
 
 import spacy
 import jsonlines
+import os
+os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
+os.environ.setdefault("VLLM_USE_FLASHINFER_SAMPLER", "0")
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from vllm import LLM, SamplingParams
 import random
 import torch
-import os
 import numpy as np
 import openai
 from tqdm import tqdm
 import json
 import argparse
 import ast
+import multiprocessing as mp
 import re
 from tqdm import tqdm
 from collections import Counter
@@ -26,11 +29,18 @@ from metrics import match, accuracy
 
 seed = 633
 
+mp.set_start_method("spawn", force=True)
 torch.backends.cudnn.deterministic = True
 random.seed(seed)
 np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed_all(seed)
+torch.random.default_generator.manual_seed(seed)
+
+
+def get_logprob_value(token_logprobs, token_id, default=-100.0):
+    if token_logprobs is None or token_id not in token_logprobs:
+        return default
+    value = token_logprobs[token_id]
+    return float(getattr(value, "logprob", value))
 
 
 def postprocess_answer_option_conditioned(answer):
@@ -74,10 +84,7 @@ def call_model_rerank_w_scores_batch(prompt, evidences, model, max_new_tokens=15
         if threshold is not None:
             score_dict = {}
             for tok, id in ret_tokens.items():
-                if id not in pred_log_probs[0]:
-                    score_dict[tok] = -100
-                prob = pred_log_probs[0][id]
-                score_dict[tok] = float(prob)
+                score_dict[tok] = get_logprob_value(pred_log_probs[0], id)
             do_retrieve = score_dict["[Retrieval]"] / (
                 score_dict["[Retrieval]"] + score_dict["[No Retrieval]"]) > threshold
         else:
@@ -110,8 +117,7 @@ def call_model_rerank_w_scores_batch(prompt, evidences, model, max_new_tokens=15
             ut_score_dict.setdefault(p_idx, {})
             # Compute reward scores
             for tok, id in rel_tokens.items():
-                prob = pred_log_probs[0][id] if id in pred_log_probs[0] else -100
-                relevance_score_dict[p_idx][tok] = np.exp(float(prob))
+                relevance_score_dict[p_idx][tok] = np.exp(get_logprob_value(pred_log_probs[0], id))
 
             if grd_tokens is not None:
                 groundness_token_appear_indices = []
@@ -122,8 +128,7 @@ def call_model_rerank_w_scores_batch(prompt, evidences, model, max_new_tokens=15
                 if len(groundness_token_appear_indices) > 0:
                     idx = groundness_token_appear_indices[0]
                     for token, token_id in grd_tokens.items():
-                        prob = pred_log_probs[idx][token_id] if token_id in pred_log_probs[idx] else -100
-                        grd_score_dict[p_idx][token] = np.exp(float(prob))
+                        grd_score_dict[p_idx][token] = np.exp(get_logprob_value(pred_log_probs[idx], token_id))
 
             if ut_tokens is not None:
                 utility_token_appear_indices = []
@@ -133,8 +138,7 @@ def call_model_rerank_w_scores_batch(prompt, evidences, model, max_new_tokens=15
                 if len(utility_token_appear_indices) > 0:
                     idx = utility_token_appear_indices[0]
                     for token, token_id in ut_tokens.items():
-                        prob = pred_log_probs[idx][token_id] if token_id in pred_log_probs[idx] else -100
-                        ut_score_dict[p_idx][token] = np.exp(float(prob))
+                        ut_score_dict[p_idx][token] = np.exp(get_logprob_value(pred_log_probs[idx], token_id))
 
             relevance_score = relevance_score_dict[p_idx]["[Relevant]"] / (
                 np.sum(list(relevance_score_dict[p_idx].values())))
@@ -305,10 +309,10 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(gpt, padding_side="left")
     if args.dtype is not None:
         model = LLM(model=gpt, download_dir=args.download_dir,
-                    dtype=args.dtype, tensor_parallel_size=args.world_size,)
+                    dtype=args.dtype, tensor_parallel_size=args.world_size, max_logprobs=-1,)
     else:
         model = LLM(model=gpt, download_dir=args.download_dir,
-                    dtype=args.dtype, tensor_parallel_size=args.world_size,)
+                    dtype=args.dtype, tensor_parallel_size=args.world_size, max_logprobs=-1,)
 
     # Get token ids for reflection tokens.
     ret_tokens, rel_tokens, grd_tokens, ut_tokens = load_special_tokens(
